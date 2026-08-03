@@ -1,3 +1,4 @@
+from datetime import datetime
 from datetime import datetime, timezone, timedelta
 from hashlib import md5
 import json
@@ -354,3 +355,17 @@ class Task(db.Model):
     def get_progress(self):
         job = self.get_rq_job()
         return job.meta.get('progress', 0) if job is not None else 100
+
+class Device(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    device_token = db.Column(db.String(256), unique=True, index=False)
+    user_agent = db.Column(db.String(256), index=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    saved_accounts = db.relationship('SavedAccount', backref='device', lazy=True,cascade="all, delete-orphan")
+
+class SavedAccount(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('device.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='saved_accounts', lazy=True)

@@ -1,14 +1,36 @@
+import uuid
+from flask import session
 from flask import render_template, redirect, url_for, flash, request
 from urllib.parse import urlsplit
 from flask_login import login_user, logout_user, current_user
 from flask_babel import _
+from flask_wtf import form
 import sqlalchemy as sa
 from app import db
 from app.auth import bp
-from app.auth.forms import LoginForm, RegistrationForm, \
+from app.auth.forms import LoginForm, RegistrationForm,\
     ResetPasswordRequestForm, ResetPasswordForm
-from app.models import User
+from app.models import Device, SavedAccount, User
 from app.auth.email import send_password_reset_email
+
+def get_current_device():
+    token = session.get("device_token")
+
+    if token is None:
+        token = str(uuid.uuid4())
+        session["device_token"] = token
+
+    device = Device.query.filter_by(device_token=token).first()
+
+    if device is None:
+        device = Device(
+            device_token=token,
+            user_agent=request.user_agent.string[:255]
+        )
+        db.session.add(device)
+        db.session.commit()
+
+    return device
 
 
 @bp.route('/login', methods=['GET', 'POST'])
@@ -23,12 +45,78 @@ def login():
             flash(_('Invalid username or password'))
             return redirect(url_for('auth.login'))
         login_user(user, remember=form.remember_me.data)
+        device = get_current_device()
+        saved = SavedAccount.query.filter_by(
+            device_id=device.id,
+            user_id=user.id
+        ).first()
+        if saved is None:
+            db.session.add(
+                SavedAccount(
+                    device_id=device.id,
+                    user_id=user.id
+                )
+            )
+            db.session.commit()
         next_page = request.args.get('next')
         if not next_page or urlsplit(next_page).netloc != '':
             next_page = url_for('main.index')
         return redirect(next_page)
-    return render_template('auth/login.html', title=_('Sign In'), form=form)
+    device = get_current_device()
 
+    saved_accounts = SavedAccount.query.filter_by(
+        device_id=device.id
+    ).all()
+
+    return render_template(
+        'auth/login.html',
+        title=_('Sign In'),
+        form=form,
+        saved_accounts=saved_accounts
+    )
+
+@bp.route('/switch_account/<int:user_id>')
+def switch_account(user_id):
+    device = get_current_device()
+
+    saved = SavedAccount.query.filter_by(
+        device_id=device.id,
+        user_id=user_id
+    ).first()
+
+    if saved is None:
+        flash(_('Account not available on this device.'))
+        return redirect(url_for('auth.login'))
+
+    if current_user.is_authenticated:
+        logout_user()
+
+    login_user(saved.user, remember=True)
+
+    flash(_('Switched to %(username)s.', username=saved.user.username))
+
+    return redirect(url_for('main.index'))
+
+
+@bp.route('/remove_saved_account/<int:user_id>')
+def remove_saved_account(user_id):
+    device = get_current_device()
+
+    saved = SavedAccount.query.filter_by(
+        device_id=device.id,
+        user_id=user_id
+    ).first()
+
+    if saved is None:
+        flash(_('Account not found.'))
+        return redirect(url_for('auth.login'))
+
+    db.session.delete(saved)
+    db.session.commit()
+
+    flash(_('Saved account removed.'))
+
+    return redirect(url_for('auth.login'))
 
 @bp.route('/logout')
 def logout():

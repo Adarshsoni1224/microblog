@@ -1,12 +1,50 @@
-{% extends 'base.html' %}
-{% import "bootstrap_wtf.html" as wtf %}
+{% extends 'base.html' %} {% import "bootstrap_wtf.html" as wtf %} {% block
+content %}
+<h1>{{ _('Sign In') }}</h1>
 
-{% block content %}
-    <h1>{{ _('Sign In') }}</h1>
-    {{ wtf.quick_form(form) }}
-    <p>{{ _('New User?') }} <a href="{{ url_for('auth.register') }}">{{ _('Click to Register!') }}</a></p>
-    <p>
-        {{ _('Forgot Your Password?') }}
-        <a href="{{ url_for('auth.reset_password_request') }}">{{ _('Click to Reset It') }}</a>
-    </p>
+{% if saved_accounts %}
+<hr />
+<h3>Saved Accounts</h3>
+
+<div class="list-group mb-4">
+  {% for account in saved_accounts %}
+  <div
+    class="list-group-item d-flex justify-content-between align-items-center"
+  >
+    <div>
+      <strong>{{ account.user.username }}</strong>
+    </div>
+
+    <div>
+      <a
+        href="{{ url_for('auth.switch_account', user_id=account.user.id) }}"
+        class="btn btn-primary btn-sm"
+      >
+        Switch
+      </a>
+
+      <a
+        href="{{ url_for('auth.remove_saved_account', user_id=account.user.id) }}"
+        class="btn btn-danger btn-sm"
+      >
+        Remove
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %} {{ wtf.quick_form(form) }}
+
+<p>
+  {{ _('New User?') }}
+  <a href="{{ url_for('auth.register') }}"> {{ _('Click to Register!') }} </a>
+</p>
+
+<p>
+  {{ _('Forgot Your Password?') }}
+  <a href="{{ url_for('auth.reset_password_request') }}">
+    {{ _('Click to Reset It') }}
+  </a>
+</p>
+
 {% endblock %}
